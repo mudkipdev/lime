@@ -1,18 +1,14 @@
-use std::{io::{self, Error}, panic, process::exit};
-use crossterm::{
-    execute,
-    cursor,
-    event::{self, Event, KeyCode, KeyModifiers},
-    style::{Print, SetBackgroundColor, SetForegroundColor},
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen}
-};
+use std::{panic, process::exit};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
-use crate::{buffer::{Buffer, Movement}, config::Config, theme::ThemeManager};
+use crate::{buffer::{Buffer, Movement}, config::Config, theme::ThemeManager, ui::{enter_raw_mode, exit_raw_mode, StatusBar, Terminal, Element}};
 
 pub struct Editor {
     pub config: Config,
+    pub terminal: Terminal,
     pub buffer: Buffer,
-    pub theme_manager: ThemeManager
+    pub theme_manager: ThemeManager,
+    pub status_bar: StatusBar<'static>
 }
 
 impl Editor {
@@ -27,57 +23,35 @@ impl Editor {
             _ => ()
         };
 
-        Self {
+        let buffer = Buffer::empty();
+
+        let editor = Self {
             config: config,
-            buffer: Buffer::empty(),
-            theme_manager: ThemeManager::new()
-        }
+            terminal: Terminal::new(),
+            buffer: buffer,
+            theme_manager: ThemeManager::new(),
+            status_bar: StatusBar { buffer: &buffer }
+        };
+
+        editor
     }
 
-    pub fn initialize(&self) {
-        let default_panic = panic::take_hook();
-
-        panic::set_hook(Box::new(move |info| {
-            // TODO: call self.quit()
-            execute!(
-                io::stdout(),
-                cursor::Show,
-                event::DisableBracketedPaste,
-                event::DisableFocusChange,
-                event::DisableMouseCapture,
-                LeaveAlternateScreen
-            ).unwrap();
-
-            disable_raw_mode().unwrap();
-            default_panic(info);
-        }));
-
-        enable_raw_mode().unwrap();
-        execute!(
-            io::stdout(),
-            EnterAlternateScreen,
-            event::EnableBracketedPaste,
-            event::EnableFocusChange,
-            event::EnableMouseCapture,
-            cursor::Hide
-        ).unwrap();
+    pub fn initialize(&mut self) {
+        self.terminal.set_panic_hook();
+        enter_raw_mode();
     }
 
-    pub fn quit(&self) {
-        execute!(
-            io::stdout(),
-            cursor::Show,
-            event::DisableBracketedPaste,
-            event::DisableFocusChange,
-            event::DisableMouseCapture,
-            LeaveAlternateScreen
-        ).unwrap();
-        disable_raw_mode().unwrap();
+    pub fn quit(&mut self) {
+        exit_raw_mode();
         exit(0);
     }
 
     pub fn handle_events(&mut self) {
         match event::read().unwrap() {
+            Event::Resize(columns, rows) => {
+                self.terminal.columns = columns;
+                self.terminal.rows = rows;
+            },
             Event::Key(event) => {
                 if event.modifiers == KeyModifiers::CONTROL {
                     match event.code {
@@ -101,16 +75,8 @@ impl Editor {
         }
     }
 
-    pub fn render(&self) {
-        let theme = self.theme_manager.current_theme();
-
-        execute!(
-            io::stdout(),
-            cursor::MoveTo(0, 0),
-            SetBackgroundColor(theme.background),
-            SetForegroundColor(theme.foreground),
-            Clear(ClearType::All),
-            Print(format!("{}", self.buffer.text.to_string()))
-        ).unwrap();
+    pub fn render(&mut self) {
+        self.terminal.render();
+        self.status_bar.render(&mut self.terminal);
     }
 }

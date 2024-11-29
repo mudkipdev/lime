@@ -1,30 +1,18 @@
-use std::{fs::File, io::{BufReader, Error}};
+use std::{fs::File, io::{BufReader, Error}, path::PathBuf};
 
 use crossterm::event::KeyCode;
 use ropey::Rope;
 
-pub enum Movement {
-    Up,
-    Left,
-    Right,
-    Down
-}
-
-impl Movement {
-    pub fn from_key_code(key_code: KeyCode) -> Option<Movement> {
-        match key_code {
-            KeyCode::Up => Option::Some(Movement::Up),
-            KeyCode::Left => Option::Some(Movement::Left),
-            KeyCode::Right => Option::Some(Movement::Right),
-            KeyCode::Down => Option::Some(Movement::Down),
-            _ => Option::None
-        }
-    }
+pub struct Selection {
+    pub start: usize,
+    pub end: usize
 }
 
 pub struct Buffer {
     pub text: Rope,
+    pub file: Option<PathBuf>,
     pub position: usize,
+    pub selection: Option<Selection>,
     pub modified: bool
 }
 
@@ -32,24 +20,33 @@ impl Buffer {
     pub fn empty() -> Self {
         Self {
             text: Rope::new(),
+            file: None,
             position: 0,
+            selection: None,
             modified: false
         }
     }
 
-    pub fn open(path: &str) -> Result<Self, Error> {
-        let file = File::open(path)?;
+    pub fn open(path: PathBuf) -> Result<Self, Error> {
+        let file = File::open(path.clone())?;
         let reader = BufReader::new(file);
         let rope = Rope::from_reader(reader)?;
 
         Ok(Self {
             text: rope,
+            file: Some(path),
             position: 0,
+            selection: None,
             modified: false
         })
     }
 
     pub fn save(&mut self) -> Result<(), Error> {
+        if self.file.is_none() {
+            // TODO: cannot save non-file buffers
+            return Ok(())
+        }
+
         self.modified = false;
         Ok(())
     }
@@ -95,5 +92,24 @@ impl Buffer {
         self.text.remove(self.position - 1 .. self.position);
         self.position -= 1;
         self.modified = true;
+    }
+}
+
+pub enum Movement {
+    Up,
+    Left,
+    Right,
+    Down
+}
+
+impl Movement {
+    pub fn from_key_code(key_code: KeyCode) -> Option<Movement> {
+        match key_code {
+            KeyCode::Up => Option::Some(Movement::Up),
+            KeyCode::Left => Option::Some(Movement::Left),
+            KeyCode::Right => Option::Some(Movement::Right),
+            KeyCode::Down => Option::Some(Movement::Down),
+            _ => Option::None
+        }
     }
 }

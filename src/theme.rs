@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crossterm::style::Color;
 
 const fn from_rgb(rgb: u32) -> Color {

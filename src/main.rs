@@ -1,5 +1,6 @@
 mod editor;
 mod buffer;
+mod ui;
 mod config;
 mod theme;
 
